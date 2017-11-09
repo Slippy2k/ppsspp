@@ -44,6 +44,11 @@ public:
 	void CreateCheatFile();
 	void Run();
 	bool HasCheats();
+	int TARdxRegister = 0;
+	int TARdxRepeat = 0;
+	size_t TARtoExecute = 0;
+	uint32_t TARoffset = 0;
+	bool TARexecutionStatus = true;
 
 private:
 	void InvalidateICache(u32 addr, int size);
