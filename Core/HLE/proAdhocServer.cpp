@@ -148,6 +148,20 @@ static const db_crosslink default_crosslinks[] = {
 	{ "ULES00566", "ULUS10180" },
 	{ "ULJM05202", "ULUS10180" },
 
+	// Medal of Honor Heroes // untested
+	{ "ULES00557", "ULUS10141" },
+	{ "ULJM05213", "ULUS10141" },
+	{ "NPJH50306", "ULUS10141" },
+
+	// Medal of Honor Heroes 2 // untested
+	{ "ULES00988", "ULUS10310" },
+	{ "ULAS42120", "ULUS10310" },
+	{ "ULJM05301", "ULUS10310" },
+	{ "ULES00955", "ULUS10310" },
+	{ "ULES00956", "ULUS10310" },
+	{ "ULJM05430", "ULUS10310" },
+	{ "NPJH50307", "ULUS10310" },
+
 	// Metal Gear Solid - Peace Walker
 	{ "ULES01372", "NPJH50045" },
 	{ "ULUS10509", "NPJH50045" },
@@ -368,6 +382,7 @@ static const db_productid default_productids[] = {
 	{ "ULJS00385", "Mahou Shoujo Nanoha A's Portable - The Gears of Destiny" },
 	{ "ULUS10408", "Mana Khemia Student Alliance" },
 	{ "ULUS10141", "Medal Of Honor Heroes" },
+	{ "ULUS10310", "Medal Of Honor Heroes 2" },
 	{ "NPJH50045", "Metal Gear Solid - Peace Walker" },
 	{ "ULUS10202", "Metal Gear Solid - Portable Ops" },
 	{ "ULUS10290", "Metal Gear Solid - Portable Ops +" },
@@ -492,13 +507,13 @@ void login_user_stream(int fd, uint32_t ip)
 	// Enough Space available
 	if(_db_user_count < SERVER_USER_MAXIMUM)
 	{
-		// Check IP Duplication
+		// Check IP Duplication as current AdhocServer doesn't receives/broadcasts binded port information having more than 1 players using the same IP will only cause communication interference (sometimes clients bind to specific port on some games) since Reusable port will share the socket buffer when one already read the data the other can't read it anymore (no longer in buffer)
 		SceNetAdhocctlUserNode * u = _db_user;
 		while(u != NULL && u->resolver.ip != ip) u = u->next;
 
 		if (u != NULL) { // IP Already existed
 			uint8_t * ip4 = (uint8_t *)&u->resolver.ip;
-			INFO_LOG(SCENET, "AdhocServer: Already Existing IP: %u.%u.%u.%u\n", ip4[0], ip4[1], ip4[2], ip4[3]);
+			WARN_LOG(SCENET, "AdhocServer: Already Existing IP: %u.%u.%u.%u\n", ip4[0], ip4[1], ip4[2], ip4[3]);
 		}
 
 		// Unique IP Address
@@ -543,7 +558,7 @@ void login_user_stream(int fd, uint32_t ip)
 		}
 	}
 
-	// Duplicate IP, Allocation Error or not enough space - Close Stream
+	// Duplicate IP/MAC, Allocation Error or not enough space - Close Stream
 	closesocket(fd);
 }
 
@@ -567,6 +582,29 @@ void login_user_data(SceNetAdhocctlUserNode * user, SceNetAdhocctlLoginPacketC2S
 	// Valid Packet Data
 	if(valid_product_code == 1 && memcmp(&data->mac, "\xFF\xFF\xFF\xFF\xFF\xFF", sizeof(data->mac)) != 0 && memcmp(&data->mac, "\x00\x00\x00\x00\x00\x00", sizeof(data->mac)) != 0 && data->name.data[0] != 0)
 	{
+		// Check for duplicated MAC as most games identify Players by MAC
+		SceNetAdhocctlUserNode * u = _db_user;
+		while (u != NULL && !IsMatch(u->resolver.mac, data->mac)) u = u->next;
+			if (u != NULL) { // MAC Already existed
+						/*
+						u32_le sip = user->resolver.ip;
+						// 127.0.0.1 should be replaced with LAN/WAN IP whenever available to make sure remote players can communicate with current (local) player
+						// It might be better if the client connects to AdhocServer using the correct interface instead of automatically changing the IP which might not be accurate on multihomed computer.
+						if (sip == 0x0100007f) {
+							char str[256];
+							gethostname(str, 256);
+							u8 *pip = (u8*)&sip;
+							struct hostent *pHost = 0;
+							pHost = gethostbyname(str);
+							if (pHost->h_addrtype == AF_INET && pHost->h_addr_list[0] != NULL) pip = (u8*)pHost->h_addr_list[0];
+							user->resolver.ip = *(u32_le*)pip;
+							WARN_LOG(SCENET, "AdhocServer: Replacing IP %u.%u.%u.%u with %u.%u.%u.%u", ((u8*)&sip)[0], ((u8*)&sip)[1], ((u8*)&sip)[2], ((u8*)&sip)[3], pip[0], pip[1], pip[2], pip[3]);
+						}
+						*/
+			uint8_t * ip4 = (uint8_t *)&u->resolver.ip;
+			WARN_LOG(SCENET, "AdhocServer: Already Existing MAC: %02X:%02X:%02X:%02X:%02X:%02X [%u.%u.%u.%u]\n", data->mac.data[0], data->mac.data[1], data->mac.data[2], data->mac.data[3], data->mac.data[4], data->mac.data[5], ip4[0], ip4[1], ip4[2], ip4[3]);
+		}
+
 		// Game Product Override
 		game_product_override(&data->game);
 
@@ -687,11 +725,7 @@ void logout_user(SceNetAdhocctlUserNode * user)
 			// Free Game Node Memory
 			free(user->game);
 		}
-	}
-
-	// Unidentified User
-	else
-	{
+	} else { // Unidentified User	
 		// Notify User
 		uint8_t * ip = (uint8_t *)&user->resolver.ip;
 		INFO_LOG(SCENET, "AdhocServer: Dropped Connection to %u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
@@ -1783,8 +1817,15 @@ int create_listen_socket(uint16_t port)
 		struct sockaddr_in local;
 		memset(&local, 0, sizeof(local));
 		local.sin_family = AF_INET;
-		local.sin_addr.s_addr = INADDR_ANY;
+		local.sin_addr.s_addr = INADDR_ANY; // bind to all network adapter
 		local.sin_port = htons(port);
+
+		//Should only bind to specific IP for the 2nd or more instance of PPSSPP to prevent communication interference issue when sharing the same port. Doesn't work well when PPSSPP_ID reseted everytime emulation restarted.
+		/*
+		if (PPSSPP_ID > 1) {
+			local.sin_addr = ((sockaddr_in *)&localIP)->sin_addr;
+		}
+		*/
 
 		// Bind Local Address to Socket
 		int bindresult = bind(fd, (struct sockaddr *)&local, sizeof(local));
@@ -1857,14 +1898,18 @@ int server_loop(int server)
 				// Login User (Stream)
 				if (loginresult != -1) {
 					u32_le sip = addr.sin_addr.s_addr;
+					/*
 					if (sip == 0x0100007f) { //127.0.0.1 should be replaced with LAN/WAN IP whenever available
-						char str[100];
-						gethostname(str, 100);
+						char str[256];
+						gethostname(str, 256);
 						u8 *pip = (u8*)&sip;
-						if (gethostbyname(str)->h_addrtype == AF_INET && gethostbyname(str)->h_addr_list[0] != NULL) pip = (u8*)gethostbyname(str)->h_addr_list[0];
+						struct hostent *pHost = 0;
+						pHost = gethostbyname(str);
+						if (pHost->h_addrtype == AF_INET && pHost->h_addr_list[0] != NULL) pip = (u8*)pHost->h_addr_list[0];
 						sip = *(u32_le*)pip;
 						WARN_LOG(SCENET, "AdhocServer: Replacing IP %s with %u.%u.%u.%u", inet_ntoa(addr.sin_addr), pip[0], pip[1], pip[2], pip[3]);
 					}
+					*/
 					login_user_stream(loginresult, sip);
 				}
 			} while(loginresult != -1);

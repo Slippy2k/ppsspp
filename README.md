@@ -135,7 +135,3 @@ Adhoc support
 -------------
 Not fully functional, but some games work.  Check the [Ad-Hoc section of the forum](http://forums.ppsspp.org/forumdisplay.php?fid=34) for help.
 
-Credit goes to:
- - Igor Calabria
- - [coldbird's code](https://code.google.com/archive/p/aemu/)
- - Kyhel

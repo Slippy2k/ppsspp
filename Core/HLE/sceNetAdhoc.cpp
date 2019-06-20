@@ -272,6 +272,9 @@ static int sceNetAdhocPdpCreate(const char *mac, u32 port, int bufferSize, u32 u
 					sockaddr_in addr;
 					addr.sin_family = AF_INET;
 					addr.sin_addr.s_addr = INADDR_ANY;
+					if (/*PPSSPP_ID > 1*/isLocalServer) {
+						getLocalIp(&addr);
+					}
 
 					//if (port < 7) addr.sin_port = htons(port + 1341); else // <= 443
 					addr.sin_port = htons(port + portOffset ); // This not safe in any way...
@@ -1640,7 +1643,8 @@ static int sceNetAdhocPtpOpen(const char *srcmac, int sport, const char *dstmac,
 			// Valid Ports
 			if (!isPTPPortInUse(sport) /*&& dport != 0*/) {
 				//sport 0 should be shifted back to 0 when using offset Phantasy Star Portable 2 use this
-				if (sport == 0) sport = -(int)portOffset;
+				//if (sport == 0) sport = -(int)portOffset;
+
 				// Valid Arguments
 				if (bufsize > 0 && rexmt_int > 0 && rexmt_cnt > 0) {
 					// Create Infrastructure Socket
@@ -1660,6 +1664,9 @@ static int sceNetAdhocPtpOpen(const char *srcmac, int sport, const char *dstmac,
 						// addr.sin_len = sizeof(addr);
 						addr.sin_family = AF_INET;
 						addr.sin_addr.s_addr = INADDR_ANY;
+						if (/*PPSSPP_ID > 1*/isLocalServer) {
+							getLocalIp(&addr);
+						}
 						addr.sin_port = htons(sport + portOffset);
 						
 						// Bound Socket to local Port
@@ -1790,10 +1797,10 @@ static int sceNetAdhocPtpAccept(int id, u32 peerMacAddrPtr, u32 peerPortPtr, int
 					// Blocking Behaviour
 					if (!flag && newsocket == -1) {
 						// Get Start Time
-						uint32_t starttime = (uint32_t)(real_time_now()*1000000.0);
+						uint32_t starttime = (uint32_t)(CoreTiming::GetGlobalTimeUsScaled());
 						
 						// Retry until Timeout hits
-						while ((timeout == 0 ||((uint32_t)(real_time_now()*1000000.0) - starttime) < (uint32_t)timeout) && newsocket == -1) {
+						while ((timeout == 0 ||((uint32_t)(CoreTiming::GetGlobalTimeUsScaled()) - starttime) < (uint32_t)timeout) && newsocket == -1) {
 							// Accept Connection
 							newsocket = accept(socket->id, (sockaddr *)&peeraddr, &peeraddrlen);
 							
@@ -1989,14 +1996,14 @@ static int sceNetAdhocPtpConnect(int id, int timeout, int flag) {
 						// Blocking Mode
 						else {
 							// Grab Connection Start Time
-							uint32_t starttime = (uint32_t)(real_time_now()*1000000.0);
+							uint32_t starttime = (uint32_t)(CoreTiming::GetGlobalTimeUsScaled());
 							
 							// Peer Information (for Connection-Polling)
 							sockaddr_in peer;
 							memset(&peer, 0, sizeof(peer));
 							socklen_t peerlen = sizeof(peer);
 							// Wait for Connection
-							while ((timeout == 0 || ( (uint32_t)(real_time_now()*1000000.0) - starttime) < (uint32_t)timeout) && getpeername(socket->id, (sockaddr *)&peer, &peerlen) != 0) {
+							while ((timeout == 0 || ( (uint32_t)(CoreTiming::GetGlobalTimeUsScaled()) - starttime) < (uint32_t)timeout) && getpeername(socket->id, (sockaddr *)&peer, &peerlen) != 0) {
 								// Wait 1ms
 								sleep_ms(1);
 							}
@@ -2132,6 +2139,9 @@ static int sceNetAdhocPtpListen(const char *srcmac, int sport, int bufsize, int 
 						sockaddr_in addr;
 						addr.sin_family = AF_INET;
 						addr.sin_addr.s_addr = INADDR_ANY;
+						if (/*PPSSPP_ID > 1*/isLocalServer) {
+							getLocalIp(&addr);
+						}
 						addr.sin_port = htons(sport + portOffset);
 						
 						int iResult = 0;
@@ -2538,12 +2548,15 @@ int sceNetAdhocMatchingDelete(int matchingId) {
 			item->eventlock->lock(); // Make sure it's not locked when being deleted
 			item->eventlock->unlock();
 			delete item->eventlock; 
+			item->eventlock = NULL;
 			item->inputlock->lock(); // Make sure it's not locked when being deleted
 			item->inputlock->unlock();
 			delete item->inputlock; 
+			item->inputlock = NULL;
 			item->socketlock->lock(); // Make sure it's not locked when being deleted
 			item->socketlock->unlock();
 			delete item->socketlock;
+			item->socketlock = NULL;
 			// Free item context memory
 			free(item);
 			item = NULL;
@@ -4655,9 +4668,11 @@ void actOnBirthPacket(SceNetAdhocMatchingContext * context, SceNetEtherAddr * se
 				sibling->state = PSP_ADHOC_MATCHING_PEER_CHILD;
 
 				// Initialize Ping Timer
-				peer->lastping = CoreTiming::GetGlobalTimeUsScaled(); //real_time_now()*1000000.0;
+				sibling->lastping = CoreTiming::GetGlobalTimeUsScaled(); //real_time_now()*1000000.0;
 
 				peerlock.lock();
+
+				peer->lastping = sibling->lastping;
 
 				// Link Peer
 				sibling->next = context->peerlist;
