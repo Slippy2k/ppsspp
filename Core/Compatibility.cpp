@@ -64,6 +64,9 @@ void Compatibility::CheckSettings(IniFile &iniFile, const std::string &gameID) {
 	CheckSetting(iniFile, gameID, "ForceUMDDelay", &flags_.ForceUMDDelay);
 	CheckSetting(iniFile, gameID, "ForceMax60FPS", &flags_.ForceMax60FPS);
 	CheckSetting(iniFile, gameID, "JitInvalidationHack", &flags_.JitInvalidationHack);
+	CheckSetting(iniFile, gameID, "AdhocHack", &flags_.AdhocHackDisableNBSwitch);
+	CheckSetting(iniFile, gameID, "AdhocHackStopFriendClear", &flags_.AdhocHackStopFriendClear);
+	CheckSetting(iniFile, gameID, "AdhocHackPhantasyStarOffset", &flags_.AdhocHackPhantasyStarOffset);
 }
 
 void Compatibility::CheckSetting(IniFile &iniFile, const std::string &gameID, const char *option, bool *flag) {
