@@ -347,6 +347,7 @@ public:
 	std::string sNickName;
 	std::string proAdhocServer;
 	std::string sMACAddress;
+	bool bMOHH2hack;
 	int iPortOffset;
 	int iLanguage;
 	int iTimeFormat;

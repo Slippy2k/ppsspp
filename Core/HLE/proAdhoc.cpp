@@ -1083,6 +1083,8 @@ int friendFinder(){
 			if (rx[0] == OPCODE_CONNECT_BSSID) {
 				INFO_LOG(SCENET, "FriendFinder: Incoming OPCODE_CONNECT_BSSID");
 				// Enough Data available
+				if(g_Config.bMOHH2hack) // Really bad, but works around MOHH2 timing issue
+					sleep_ms(666*10); // Don't hurry, be happy, 5s wasn't enough, let's use a safe number
 				if (rxpos >= (int)sizeof(SceNetAdhocctlConnectBSSIDPacketS2C)) {
 					// Cast Packet
 					SceNetAdhocctlConnectBSSIDPacketS2C * packet = (SceNetAdhocctlConnectBSSIDPacketS2C *)rx;
